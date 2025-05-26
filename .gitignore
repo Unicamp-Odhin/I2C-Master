@@ -1,0 +1,13 @@
+build/
+fpga/digilent_arty_a7/usage_statistics_webtalk.html
+fpga/digilent_arty_a7/usage_statistics_webtalk.xml
+rtl/spi2.v
+fpga/digilent_arty_a7/clockInfo.txt
+clockInfo.txt
+fpga/digilent_arty_a7/clockInfo.txt
+reports/
+.Xil/
+fpga/nexys4_ddr/.Xil/top_propImpl.xdc
+fpga/nexys4_ddr/usage_statistics_webtalk.html
+fpga/nexys4_ddr/usage_statistics_webtalk.xml
+fpga/opensourceSDRLabKintex7/openFPGALoader
