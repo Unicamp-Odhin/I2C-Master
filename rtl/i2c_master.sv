@@ -2,7 +2,7 @@
 
 module i2c_master #(
     parameter SYSTEM_CLOCK_FREQ = 100_000_000,
-    parameter I2C_CLOCK_FREQ    = 5_000_000
+    parameter I2C_CLOCK_FREQ    = 50_000_000
 )(
     input  logic sys_clk,
     input  logic rst_n,
@@ -51,6 +51,7 @@ module i2c_master #(
     assign negedge_scl = (edge_reg[2] && !edge_reg[1]);
 
     assign scl = scl_en ? scl_int : 1'b1;
+    // assign sda = sda_oe ? sda_out : 1'b1;
     assign sda = sda_oe ? sda_out : 1'bz;
 
     // Clock divider
@@ -77,7 +78,7 @@ module i2c_master #(
             state            <= IDLE;
             busy_o           <= 0;
             scl_en           <= 0;
-            sda_oe           <= 1;
+            sda_oe           <= 0;
             sda_out          <= 1;
             stop_o           <= 0;
             data_out_valid_o <= 0;
@@ -86,6 +87,7 @@ module i2c_master #(
         end else begin
             case (state)
                 IDLE: begin
+                    sda_oe           <= 0;
                     busy_o           <= 0;
                     stop_o           <= 0;
                     data_out_valid_o <= 0;
@@ -104,6 +106,7 @@ module i2c_master #(
                 end
 
                 START: begin
+                    sda_oe  <= 1;
                     sda_out <= 0;
                     scl_en  <= 1;
                     
@@ -215,16 +218,21 @@ module i2c_master #(
                 end
 
                 STOP: begin
-                    sda_out <= 0;
-                    scl_en  <= 0;
-                    state   <= DONE;
+                    if (scl_int == 1) begin //eu que adicionei
+                        sda_oe  <= 1; 
+                        sda_out <= 1;
+                        scl_en  <= 0;
+                        state   <= DONE;
+                    end
                 end
 
                 DONE: begin
-                    sda_out <= 1;
-                    stop_o  <= 1;
-                    busy_o  <= 0;
-                    state   <= IDLE;
+                    // if (scl_int == 1) begin //eu que adicionei
+                        sda_out <= 1;
+                        stop_o  <= 1;
+                        busy_o  <= 0;
+                        state   <= IDLE;
+                    // end
                 end
 
                 default: state <= IDLE;
