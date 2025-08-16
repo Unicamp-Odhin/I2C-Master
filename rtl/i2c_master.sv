@@ -38,7 +38,7 @@ module i2c_master #(
     state_t state;
 
     logic [7:0] shift_reg;
-    logic [2:0] bit_cnt;  //mudei para 3 bits, talvez de err0
+    logic [3:0] bit_cnt;  
     logic scl_int, scl_en;
     logic sda_out, sda_oe;
     logic [$clog2(BIT_PERIOD):0] clk_cnt;
@@ -51,8 +51,8 @@ module i2c_master #(
     assign negedge_scl = (edge_reg[2] && !edge_reg[1]);
 
     assign scl = scl_en ? scl_int : 1'b1;
-    // assign sda = sda_oe ? sda_out : 1'b1;
-    assign sda = sda_oe ? sda_out : 1'bz;
+    assign sda = sda_oe ? sda_out : 1'b1;
+    // assign sda = sda_oe ? sda_out : 1'bz;
 
     // Clock divider
     always_ff @(posedge sys_clk or negedge rst_n) begin
@@ -73,7 +73,15 @@ module i2c_master #(
         end
     end
 
-    always_ff @(posedge sys_clk or negedge rst_n) begin
+
+    reg scl_d, scl_rising_edge;
+
+    always_ff @(posedge sys_clk) begin
+        scl_d <= scl_int;
+        scl_rising_edge <= (~scl_d & scl_int);
+    end
+
+    always_ff @(negedge sys_clk or negedge rst_n) begin
         if (!rst_n) begin
             state            <= IDLE;
             busy_o           <= 0;
@@ -122,7 +130,7 @@ module i2c_master #(
                 end
 
                 SEND_ADDR: begin
-                    if (scl_int == 0) begin
+                    if (scl_int == 1) begin
                         sda_oe  <= 1;
                         sda_out <= shift_reg[bit_cnt];
                         if (bit_cnt == 0)
@@ -134,9 +142,10 @@ module i2c_master #(
 
                 ADDR_ACK: begin
                     sda_oe <= 0;
-                    if (scl_int == 1) begin
+
+                    if (scl_rising_edge) begin
                         if (sda == 0) begin
-                            if (~we_i && ~reg_operation_i) begin // direct read
+                            if (~we_i && ~reg_operation_i) begin 
                                 bit_cnt <= 7;
                                 state   <= READ_DATA;
                             end else begin
