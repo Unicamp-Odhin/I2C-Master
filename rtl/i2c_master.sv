@@ -1,4 +1,6 @@
-module I2C_Master #(
+`timescale 1ns/1ps
+
+module i2c_master #(
     parameter SYSTEM_CLOCK_FREQ = 100_000_000,
     parameter I2C_CLOCK_FREQ    = 5_000_000
 )(
@@ -36,10 +38,10 @@ module I2C_Master #(
     state_t state;
 
     logic [7:0] shift_reg;
-    logic [3:0] bit_cnt;
+    logic [2:0] bit_cnt;  //mudei para 3 bits, talvez de err0
     logic scl_int, scl_en;
     logic sda_out, sda_oe;
-    logic [$clog2(BIT_PERIOD)-1:0] clk_cnt;
+    logic [$clog2(BIT_PERIOD):0] clk_cnt;
 
     logic [2:0] edge_reg; // For edge detection
     logic posedge_scl, negedge_scl;
@@ -58,7 +60,7 @@ module I2C_Master #(
             scl_int <= 1;
         end else begin 
             if (scl_en) begin
-                if (clk_cnt == BIT_PERIOD/2 - 1) begin
+                if (clk_cnt == (BIT_PERIOD/2 - 1)) begin
                     scl_int <= ~scl_int;
                     clk_cnt <= 0;
                 end else begin
