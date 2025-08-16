@@ -51,8 +51,8 @@ module i2c_master #(
     assign negedge_scl = (edge_reg[2] && !edge_reg[1]);
 
     assign scl = scl_en ? scl_int : 1'b1;
-    assign sda = sda_oe ? sda_out : 1'b1;
-    // assign sda = sda_oe ? sda_out : 1'bz;
+    // assign sda = sda_oe ? sda_out : 1'b1;
+    assign sda = sda_oe ? sda_out : 1'bz;
 
     // Clock divider
     always_ff @(posedge sys_clk or negedge rst_n) begin
@@ -141,9 +141,8 @@ module i2c_master #(
                 end
 
                 ADDR_ACK: begin
-                    sda_oe <= 0;
-
                     if (scl_rising_edge) begin
+                        sda_oe <= 0;
                         if (sda == 0) begin
                             if (~we_i && ~reg_operation_i) begin 
                                 bit_cnt <= 7;
@@ -172,8 +171,8 @@ module i2c_master #(
                 end
 
                 REG_ACK: begin
-                    sda_oe <= 0;
-                    if (scl_int == 1) begin
+                    if (scl_rising_edge) begin
+                        sda_oe <= 0;
                         if (sda == 0) begin
                             if (~we_i) begin // read after reg write
                                 sda_oe  <= 1;
@@ -203,8 +202,8 @@ module i2c_master #(
                 end
 
                 DATA_ACK: begin
-                    sda_oe <= 0;
-                    if (scl_int == 1) begin
+                    if (scl_rising_edge) begin
+                        sda_oe <= 0;
                         state <= STOP;
                     end
                 end
