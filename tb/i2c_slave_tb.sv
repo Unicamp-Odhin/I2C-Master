@@ -27,7 +27,10 @@ module i2c_slave_tb;
     logic sda_out_slave; // Controle da saída de dados do slave (SDA)
     
     // Instanciando o módulo I²C Master
-    i2c_master uut (
+    i2c_master #(
+        .SYSTEM_CLOCK_FREQ(200_000_000),
+        .I2C_CLOCK_FREQ(50_000_000)
+    ) uut (
         .sys_clk(sys_clk),
         .rst_n(rst_n),
         .scl(scl),
@@ -149,6 +152,8 @@ module i2c_slave_tb;
         #10 sys_clk = ~sys_clk;
     end
 
+    
+
     // Processo de estímulos para testar a comunicação
     initial begin
         // Inicializa os sinais
@@ -167,54 +172,53 @@ module i2c_slave_tb;
         data_in_o = 8'h00;
 
         // Reset do sistema
-        #20 rst_n = 1;
+        #200 rst_n = 1;
 
         // Teste 1: Escrita no slave (registro)
-        #40 addr_i = 7'h50;       // Endereço do escravo 0x50 = 0b11010
+        #400 addr_i = 7'h50;       // Endereço do escravo 0x50 = 0b11010
         reg_addr_i = 8'h10;       // Endereço do registro
         data_in_o = 8'hA5;        // Dados a serem escritos
         we_i = 1;                 // Operação de escrita
         reg_operation_i = 1;      // Operação de registro
         start_i = 1;              // Inicia a comunicação
-        #20 start_i = 0;
+        #200 start_i = 0;
 
         // Aguarda o término da operação
         wait (!busy_o);
 
         // Teste 2: Leitura do slave (registro)
-        #20 addr_i = 7'h50;       // Endereço do escravo
+        #200 addr_i = 7'h50;       // Endereço do escravo
         reg_addr_i = 8'h10;       // Endereço do registro
         we_i = 0;                 // Operação de leitura
         reg_operation_i = 1;      // Operação de registro
         start_i = 1;              // Inicia a comunicação
-        #20 start_i = 0;
+        #200 start_i = 0;
 
         // Aguarda o término da operação
         wait (!busy_o);
 
         // Teste 3: Escrita no slave (memória)
-        #20 addr_i = 7'h50;       // Endereço do escravo
+        #200 addr_i = 7'h50;       // Endereço do escravo
         data_in_o = 8'h3C;        // Dados a serem escritos
         we_i = 1;                 // Operação de escrita
         reg_operation_i = 0;      // Operação de memória
         start_i = 1;              // Inicia a comunicação
-        #20 start_i = 0;
+        #200 start_i = 0;
 
         // Aguarda o término da operação
         wait (!busy_o);
 
         // Teste 4: Leitura do slave (memória)
-        #20 addr_i = 7'h50;       // Endereço do escravo
+        #200 addr_i = 7'h50;       // Endereço do escravo
         we_i = 0;                 // Operação de leitura
         reg_operation_i = 0;      // Operação de memória
         start_i = 1;              // Inicia a comunicação
-        #20 start_i = 0;
+        #200 start_i = 0;
 
         // Aguarda o término da operação
         wait (!busy_o);
-
-        // Finalizar simulação após algum tempo
-        #200 $finish;
+        // Finaliza a simulação
+        #1000 $finish;
     end
 
     // Monitoramento de sinais

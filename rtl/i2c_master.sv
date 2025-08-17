@@ -1,7 +1,7 @@
 `timescale 1ns/1ps
 
 module i2c_master #(
-    parameter SYSTEM_CLOCK_FREQ = 100_000_000,
+    parameter SYSTEM_CLOCK_FREQ = 200_000_000,
     parameter I2C_CLOCK_FREQ    = 50_000_000
 )(
     input  logic sys_clk,
@@ -35,7 +35,7 @@ module i2c_master #(
         STOP, DONE
     } state_t;
 
-    state_t state;
+    state_t state, next_state;
 
     logic [7:0] shift_reg;
     logic [3:0] bit_cnt;  
@@ -51,7 +51,6 @@ module i2c_master #(
     assign negedge_scl = (edge_reg[2] && !edge_reg[1]);
 
     assign scl = scl_en ? scl_int : 1'b1;
-    // assign sda = sda_oe ? sda_out : 1'b1;
     assign sda = sda_oe ? sda_out : 1'bz;
 
     // Clock divider
@@ -60,30 +59,24 @@ module i2c_master #(
             clk_cnt <= 0;
             scl_int <= 1;
         end else begin 
-            if (scl_en) begin
-                if (clk_cnt == (BIT_PERIOD/2 - 1)) begin
-                    scl_int <= ~scl_int;
-                    clk_cnt <= 0;
-                end else begin
-                    clk_cnt <= clk_cnt + 1;
-                end
+            if (clk_cnt == (BIT_PERIOD/2 - 1)) begin
+                scl_int <= ~scl_int;
+                clk_cnt <= 0;
+            end else begin
+                clk_cnt <= clk_cnt + 1;
             end
-
             edge_reg <= {edge_reg[1:0], scl_int};
         end
     end
 
-
-    reg scl_d, scl_rising_edge;
-
-    always_ff @(posedge sys_clk) begin
-        scl_d <= scl_int;
-        scl_rising_edge <= (~scl_d & scl_int);
+    
+    always_ff @(posedge scl_int) begin
+        state <= next_state;
     end
 
     always_ff @(negedge sys_clk or negedge rst_n) begin
         if (!rst_n) begin
-            state            <= IDLE;
+            next_state            <= IDLE;
             busy_o           <= 0;
             scl_en           <= 0;
             sda_oe           <= 0;
@@ -95,21 +88,21 @@ module i2c_master #(
         end else begin
             case (state)
                 IDLE: begin
-                    sda_oe           <= 0;
-                    busy_o           <= 0;
-                    stop_o           <= 0;
-                    data_out_valid_o <= 0;
-                    sda_out          <= 1;
-                    scl_en           <= 0;
+                    sda_oe               <= 0;
+                    busy_o               <= 0;
+                    stop_o               <= 0;
+                    data_out_valid_o     <= 0;
+                    sda_out              <= 1;
+                    scl_en               <= 0;
                     read_after_reg_write <= 0;
-                    error_o          <= 0;
+                    error_o               <= 0;
 
                     if (start_i) begin
                         busy_o <= 1;
                         if (~we_i && reg_operation_i)
                             read_after_reg_write <= 1;
 
-                        state  <= START;
+                        next_state  <= START;
                     end
                 end
 
@@ -126,93 +119,93 @@ module i2c_master #(
                     end
 
                     bit_cnt <= 7;
-                    state   <= SEND_ADDR;
+                    next_state   <= SEND_ADDR;
                 end
 
                 SEND_ADDR: begin
-                    if (scl_int == 1) begin
+                    if (posedge_scl) begin
                         sda_oe  <= 1;
                         sda_out <= shift_reg[bit_cnt];
                         if (bit_cnt == 0)
-                            state <= ADDR_ACK;
+                            next_state <= ADDR_ACK;
                         else
                             bit_cnt <= bit_cnt - 1;
                     end
                 end
 
                 ADDR_ACK: begin
-                    if (scl_rising_edge) begin
+                    if (negedge_scl) begin
                         sda_oe <= 0;
                         if (sda == 0) begin
                             if (~we_i && ~reg_operation_i) begin 
                                 bit_cnt <= 7;
-                                state   <= READ_DATA;
+                                next_state   <= READ_DATA;
                             end else begin
                                 shift_reg <= (reg_operation_i) ? reg_addr_i : data_in_o;
                                 bit_cnt   <= 7;
-                                state     <= (reg_operation_i) ? SEND_REG : SEND_DATA;
+                                next_state     <= (reg_operation_i) ? SEND_REG : SEND_DATA;
                             end
                         end else begin
                             error_o <= 1;
-                            state   <= STOP;
+                            next_state   <= STOP;
                         end
                     end
                 end
 
                 SEND_REG: begin
-                    if (scl_int == 0) begin
+                    if (negedge_scl) begin
                         sda_oe  <= 1;
                         sda_out <= shift_reg[bit_cnt];
                         if (bit_cnt == 0)
-                            state <= REG_ACK;
+                            next_state <= REG_ACK;
                         else
                             bit_cnt <= bit_cnt - 1;
                     end
                 end
 
                 REG_ACK: begin
-                    if (scl_rising_edge) begin
+                    if (negedge_scl) begin
                         sda_oe <= 0;
                         if (sda == 0) begin
                             if (~we_i) begin // read after reg write
                                 sda_oe  <= 1;
                                 sda_out <= 1;
-                                state   <= START;
+                                next_state   <= START;
                             end else begin
                                 shift_reg <= data_in_o;
                                 bit_cnt   <= 7;
-                                state     <= SEND_DATA;
+                                next_state     <= SEND_DATA;
                             end
                         end else begin
                             error_o <= 1;
-                            state   <= STOP;
+                            next_state   <= STOP;
                         end
                     end
                 end
 
                 SEND_DATA: begin
-                    if (scl_int == 0) begin
+                    if (negedge_scl) begin
                         sda_oe  <= 1;
                         sda_out <= shift_reg[bit_cnt];
                         if (bit_cnt == 0)
-                            state <= DATA_ACK;
+                            next_state <= DATA_ACK;
                         else
                             bit_cnt <= bit_cnt - 1;
                     end
                 end
 
                 DATA_ACK: begin
-                    if (scl_rising_edge) begin
+                    if (negedge_scl) begin
                         sda_oe <= 0;
-                        state <= STOP;
+                        next_state <= STOP;
                     end
                 end
 
                 READ_DATA: begin
-                    if (scl_int == 1) begin
+                    if (posedge_scl) begin
                         data_out_o[bit_cnt] <= sda;
                         if (bit_cnt == 0)
-                            state <= READ_ACK;
+                            next_state <= READ_ACK;
                         else
                             bit_cnt <= bit_cnt - 1;
                     end
@@ -222,7 +215,7 @@ module i2c_master #(
                     sda_oe  <= 1;
                     sda_out <= 1; // NACK
                     data_out_valid_o <= 1;
-                    state <= STOP;
+                    next_state <= STOP;
                 end
 
                 STOP: begin
@@ -230,7 +223,7 @@ module i2c_master #(
                         sda_oe  <= 1; 
                         sda_out <= 1;
                         scl_en  <= 0;
-                        state   <= DONE;
+                        next_state   <= DONE;
                     end
                 end
 
@@ -239,11 +232,11 @@ module i2c_master #(
                         sda_out <= 1;
                         stop_o  <= 1;
                         busy_o  <= 0;
-                        state   <= IDLE;
+                        next_state   <= IDLE;
                     // end
                 end
 
-                default: state <= IDLE;
+                default: next_state <= IDLE;
             endcase
         end
     end
