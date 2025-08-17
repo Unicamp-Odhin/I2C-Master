@@ -1,0 +1,40 @@
+## Lembrar
+    # Endereço [6:0] + Operação
+    Operação = r/~w
+
+## Endereço I2C
+    # Se o pino SDO estiver conectado ao GND, o endereço será 0x76.
+    # Se o pino SDO estiver conectado ao VCC, o endereço será 0x77.
+
+
+## Configuração Inicial (Registros de Controle)
+
+    # 1. Configuração do Sensor para Operação Normal
+    # Escrever no registro 0xF4 (Controle de Medição) para configurar o sensor.
+
+    # Escrever valor 0x27 no registro 0xF4 para configurar a resolução:
+        0x27 = 0010 0111 =  001 001 11 = oversampling ×1 | oversampling ×1 | Normal mode
+    #   - Temperatura: Média
+    #   - Pressão: Média
+    #   - Umidade: Média
+
+    >>>>>>>>>>>>>>>> I2C.write(ENDERECO_I2C, 0xF4, 0x27)
+
+# 2. Configuração de Amostragem de Umidade (Registro 0xF2)
+    só importa os ultimos 3 bits de 0x01 = 0000 0001 = oversampling ×1        
+    >>>>>>>>>>>>>>>> I2C.write(ENDERECO_I2C, 0xF2, 0x01)
+
+## Leitura da Temperatura
+    # Para ler a temperatura, vamos acessar os registros 0xFA a 0xFC.
+        0xFA - temp_msb[7:0]
+        0xFb - temp_lsb[7:0]
+        0xFC - tmp_xlsb[3:0] //apenas o mais significativos tem importancia,
+
+
+    >>>>>>>>>>>>>>> I2C.read(ENDERECO_I2C, 0xFA)
+    >>>>>>>>>>>>>>> I2C.read(ENDERECO_I2C, 0xFB)
+    >>>>>>>>>>>>>>> I2C.read(ENDERECO_I2C, 0xFC)
+
+
+    # temperature = (temperatura_data[0] << 12) | (temperatura_data[1] << 4) | (temperatura_data[2] >> 4)
+
