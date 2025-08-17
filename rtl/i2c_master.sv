@@ -28,7 +28,7 @@ module i2c_master #(
     localparam integer BIT_PERIOD = SYSTEM_CLOCK_FREQ / I2C_CLOCK_FREQ;
 
     typedef enum logic [4:0] {
-        IDLE, START, SEND_ADDR, ADDR_ACK,
+        IDLE, START, SEND_ADDR, ADDR_ACK, WAIT_ADDR_ACK,
         SEND_REG, REG_ACK,
         SEND_DATA, DATA_ACK,
         READ_DATA, READ_ACK,
@@ -127,10 +127,15 @@ module i2c_master #(
                         sda_oe  <= 1;
                         sda_out <= shift_reg[bit_cnt];
                         if (bit_cnt == 0)
-                            next_state <= ADDR_ACK;
+                            next_state <= WAIT_ADDR_ACK;
                         else
                             bit_cnt <= bit_cnt - 1;
                     end
+                end
+
+                WAIT_ADDR_ACK: begin
+                    next_state <= ADDR_ACK;
+                    sda_oe <= 0;
                 end
 
                 ADDR_ACK: begin
