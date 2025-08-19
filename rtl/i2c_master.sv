@@ -28,7 +28,7 @@ module i2c_master #(
     localparam integer BIT_PERIOD = SYSTEM_CLOCK_FREQ / I2C_CLOCK_FREQ;
 
     typedef enum logic [4:0] {
-        IDLE, START, SEND_ADDR, ADDR_ACK, WAIT_ADDR_ACK,
+        IDLE, START, SEND_ADDR, ADDR_ACK,
         SEND_REG, REG_ACK,
         SEND_DATA, DATA_ACK,
         READ_DATA, READ_ACK,
@@ -47,8 +47,8 @@ module i2c_master #(
     logic posedge_scl, negedge_scl;
     logic read_after_reg_write;
 
-    assign posedge_scl = (!edge_reg[2] && edge_reg[1]);
-    assign negedge_scl = (edge_reg[2] && !edge_reg[1]);
+    assign negedge_scl = (!edge_reg[2] && edge_reg[1]);
+    assign posedge_scl = (edge_reg[2] && !edge_reg[1]);
 
     assign scl = scl_en ? scl_int : 1'b1;
     assign sda = sda_oe ? sda_out : 1'bz;
@@ -126,21 +126,17 @@ module i2c_master #(
                     if (posedge_scl) begin
                         sda_oe  <= 1;
                         sda_out <= shift_reg[bit_cnt];
-                        if (bit_cnt == 0)
-                            next_state <= WAIT_ADDR_ACK;
+                        if (bit_cnt == 0) begin
+                            next_state <= ADDR_ACK;
+                            sda_oe <= 0;
+                        end
                         else
                             bit_cnt <= bit_cnt - 1;
                     end
                 end
 
-                WAIT_ADDR_ACK: begin
-                    next_state <= ADDR_ACK;
-                    sda_oe <= 0;
-                end
-
                 ADDR_ACK: begin
-                    if (negedge_scl) begin
-                        sda_oe <= 0;
+                    if (posedge_scl) begin
                         if (sda == 0) begin
                             if (~we_i && ~reg_operation_i) begin 
                                 bit_cnt <= 7;
@@ -149,6 +145,7 @@ module i2c_master #(
                                 shift_reg <= (reg_operation_i) ? reg_addr_i : data_in_o;
                                 bit_cnt   <= 7;
                                 next_state     <= (reg_operation_i) ? SEND_REG : SEND_DATA;
+                                sda_oe  <= 1;
                             end
                         end else begin
                             error_o <= 1;
@@ -159,10 +156,11 @@ module i2c_master #(
 
                 SEND_REG: begin
                     if (negedge_scl) begin
-                        sda_oe  <= 1;
                         sda_out <= shift_reg[bit_cnt];
-                        if (bit_cnt == 0)
+                        if (bit_cnt == 0) begin
                             next_state <= REG_ACK;
+                            sda_oe <= 0;
+                        end                            
                         else
                             bit_cnt <= bit_cnt - 1;
                     end
@@ -170,7 +168,6 @@ module i2c_master #(
 
                 REG_ACK: begin
                     if (negedge_scl) begin
-                        sda_oe <= 0;
                         if (sda == 0) begin
                             if (~we_i) begin // read after reg write
                                 sda_oe  <= 1;

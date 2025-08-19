@@ -5,7 +5,7 @@ module i2c_slave_tb;
     // Clock de sistema
     logic sys_clk;
     logic scl;            // Clock do I²C
-    logic sda;            // Dados do I²C (linha bidirecional)
+    tri sda;              // Dados do I²C (linha bidirecional)
     
     // Sinais do master (I2C Master)
     logic rst_n;          // Reset ativo baixo
@@ -24,7 +24,6 @@ module i2c_slave_tb;
     // Sinais do slave (I2C Slave)
     logic ack_slave;      // Acknowledgment do slave
     logic [7:0] data_in_slave; // Dados recebidos pelo slave
-    logic sda_out_slave; // Controle da saída de dados do slave (SDA)
     
     // Instanciando o módulo I²C Master
     i2c_master #(
@@ -48,12 +47,12 @@ module i2c_slave_tb;
         .data_out_o(data_out_o)
     );
 
-    logic sda_valid_slave, sda_tmp_slave;
-    assign sda_out_slave = sda_valid_slave ? sda_tmp_slave : 1'bz;
+    logic sda_oe_slave, sda_slave;
+    assign sda = sda_oe_slave ? sda_slave : 1'bz;
 
 
-    typedef enum logic [2:0] {
-        START, RECEIVE_ADDR, ACK, RECEIVE_REG, ACK_2, RECEIVE_DATA, ACK_3
+    typedef enum logic [3:0] {
+        START, RECEIVE_ADDR, WAIT_ACK, ACK, RECEIVE_REG, WAIT_ACK_2, ACK_2, RECEIVE_DATA, ACK_3
     } state_slave_t;
 
     state_slave_t state_slave;
@@ -65,7 +64,7 @@ module i2c_slave_tb;
     always_ff @(negedge scl or negedge rst_n) begin
         if (!rst_n) begin
             ack_slave <= 0;
-            sda_valid_slave <= 0;
+            sda_oe_slave <= 0;
             state_slave <= START;
             counter_slave <= 0;
             addr_slave <= 8'h00;  // Endereço do slave inicial
@@ -77,11 +76,11 @@ module i2c_slave_tb;
                     if (sda == 0) begin
                         state_slave <= RECEIVE_ADDR;
                         counter_slave <= 6;  // Reseta o contador do endereço
-                            $display("DEBUG: Indo para RECEIVE_ADDR");
                     end
                 end
 
                 RECEIVE_ADDR: begin
+                    sda_oe_slave <= 0;
                     if (scl == 0) begin
                         // Recebe o byte de endereço no SDA
                         addr_slave[counter_slave] <= sda;
@@ -89,28 +88,34 @@ module i2c_slave_tb;
                         if (counter_slave == 0) begin
                             // Se o endereço completo foi recebido
                             if (addr_slave == 8'h50) begin
-                                $display("DEBUG: Endereço reconhecido: %h, indo para ACK", addr_slave);
                                 state_slave <= ACK;  // Se for o endereço 0x50, vai para ACK
                                 counter_slave <= 7;
                                 reg_slave <= 8'h0;
                             end else begin
-                                $display("DEBUG: Endereço não reconhecido: %h, reiniciando para START", addr_slave);
                                 state_slave <= START;  // Caso contrário, reinicia
                             end
                         end
                     end
                 end
 
+
+                WAIT_ACK: begin
+                    state_slave <= ACK;  // Depois vai para RECEBER DADOS
+                end
+
                 ACK: begin
                     if (scl == 0) begin
+                        sda_oe_slave <= 1;
                         // Envia o ACK para indicar que o endereço foi reconhecido
                         ack_slave <= 1;
-                        sda = 0;  // Envia ACK (SDA = 0)
+                        sda_slave <= 0;  // Envia ACK (SDA = 0)
                         state_slave <= RECEIVE_REG;  // Depois vai para RECEBER DADOS
                     end
                 end
 
+
                 RECEIVE_REG: begin
+                    sda_oe_slave <= 0;
                     if (scl == 0) begin
                         // Recebe dados do mestre
                         reg_slave[counter_slave] <= sda;
@@ -118,26 +123,34 @@ module i2c_slave_tb;
                         if (counter_slave == 0) begin
                             counter_slave <= 7;
                             reg_slave <= 8'h0;
-                            state_slave <= ACK_2;  // Depois de receber os 8 bits de dados, envia ACK
+                            state_slave <= WAIT_ACK_2;  // Depois de receber os 8 bits de dados, envia ACK
                         end
                     end
+                end
+
+                WAIT_ACK_2: begin
+                    sda_oe_slave <= 1;
+                    state_slave <= ACK_2; 
                 end
 
                 ACK_2: begin
                     if (scl == 0) begin
                         ack_slave <= 1;
-                        sda = 0;  // Envia ACK (SDA = 0)
+                        sda_oe_slave <= 1;
+                        sda_slave <= 0;  // Envia ACK (SDA = 0)
                         state_slave <= RECEIVE_DATA;  // Depois vai para RECEBER DADOS
                     end
                 end
 
                 RECEIVE_DATA: begin
+                    sda_oe_slave <= 0;
                     if (scl == 0) begin
                         // Recebe dados do mestre
                         reg_slave[counter_slave] <= sda;
                         counter_slave <= counter_slave - 1;
                         if (counter_slave == 0) begin
                             state_slave <= ACK_2;  // Depois de receber os 8 bits de dados, envia ACK
+                            counter_slave <= 7;
                         end
                     end
                 end
